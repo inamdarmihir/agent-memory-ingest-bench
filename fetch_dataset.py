@@ -3,7 +3,7 @@ fetch_dataset.py
 
 Downloads the real LoCoMo dataset (snap-research/locomo, arXiv:2402.17753),
 CC BY-NC 4.0, non-commercial research use. Not vendored into this repo, same
-reason as qdrant-ternlight-techdocs doesn't vendor its upstream training code:
+reason as ternlight-techdocs doesn't vendor its upstream training code:
 it's a real, independently maintained, separately licensed dataset, better
 fetched fresh than committed as a stale copy.
 

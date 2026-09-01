@@ -3,7 +3,7 @@ embed_corpus.py
 
 Embeds the real LoCoMo memory records and a frozen, stratified sample of the
 real query set exactly once, with FastEmbed's bge-small-en-v1.5 (the same
-real embedder used as the fp32 baseline in qdrant-ternlight-techdocs, kept
+real embedder used as the fp32 baseline in ternlight-techdocs, kept
 consistent so results are comparable across this content program's repos).
 
 Embedding happens once and is cached to embeddings/, so the actual

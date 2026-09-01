@@ -46,7 +46,7 @@ VECTOR_SIZE = 384
 STREAM_BATCH_MIN, STREAM_BATCH_MAX = 1, 5
 TOUCH_RATE = 0.05          # fraction of streamed writes that are re-upserts of an existing record
 CHECKPOINT_EVERY = 500     # measure every N records written in the streamed leg
-SETTLE_SECONDS = 30        # matches qdrant-payload-audit's method: let WAL/segments settle before measuring
+SETTLE_SECONDS = 30        # matches payload-audit's method: let WAL/segments settle before measuring
 SEED = 42
 UUID_NAMESPACE = uuid.UUID("a3f1c2d4-0000-4000-8000-000000000000")
 
@@ -103,7 +103,7 @@ def measure_recall_and_latency(client: QdrantClient, collection: str,
 
 def fetch_process_metrics() -> dict:
     """Real jemalloc stats Qdrant exposes on its own /metrics endpoint,
-    same method as qdrant-payload-audit. Process-wide, not per-collection,
+    same method as payload-audit. Process-wide, not per-collection,
     which is why the container is restarted between the batch and streamed
     legs below: with only one collection resident at a time, a process-wide
     reading is an isolated reading."""

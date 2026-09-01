@@ -1,4 +1,4 @@
-# qdrant-agent-memory-ingest-bench
+# agent-memory-ingest-bench
 
 Does writing a Qdrant collection the way an AI agent's memory system actually
 writes it — continuous small batches, interleaved reads, occasional
@@ -34,7 +34,7 @@ repo; `fetch_dataset.py` downloads it fresh under its own license.
 
 **Embedder**: FastEmbed `bge-small-en-v1.5`, the same model used as the
 fp32 baseline in this program's other repo,
-[qdrant-ternlight-techdocs](https://github.com/inamdarmihir/qdrant-ternlight-techdocs).
+[ternlight-techdocs](https://github.com/inamdarmihir/ternlight-techdocs).
 Every record and every query is embedded exactly once (`embed_corpus.py`),
 before either collection is built, so embedding cost is identical and
 excluded from both legs — the only variable that differs is the write
@@ -133,7 +133,7 @@ difficulty is.
   segments would actually accumulate.
 - **`default_segment_number=1` was forced on both collections**,
   deliberately, to isolate the write-pattern variable from a
-  segment-count variable (the same choice `qdrant-payload-audit` made for
+  segment-count variable (the same choice `payload-audit` made for
   the same reason). This means the specific question "does streaming
   create segment fragmentation under Qdrant's default multi-segment
   optimizer" is untested here; this repo tests recall/latency/footprint
