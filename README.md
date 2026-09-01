@@ -170,6 +170,36 @@ default limit (32 MB) is too small for a single-call bulk upsert at this
 record count and rejects it with a plain `400` rather than a silent
 partial write, which is how this was caught during development.
 
+## Adapting this to your own data
+
+The whole method is generic once `data/` is in the right shape; nothing
+in `run_benchmark.py` is LoCoMo-specific past `fetch_dataset.py`. To point
+this at your own records:
+
+1. Write your own `data/memory_records.json`: a list of objects, each with
+   at least `id` (a string, any format, `run_benchmark.py`'s `point_id()`
+   UUID5-hashes it since Qdrant needs int/UUID point IDs) and `text` (the
+   string that gets embedded).
+2. Write your own `data/query_set.json`: a list of objects with `question`
+   (the query text), `category` (any label, used only for the stratified
+   sample, a single category is fine) and `evidence_ids` (a list of the
+   `memory_records.json` `id` values that should count as a correct
+   retrieval for that query, the ground truth `measure_recall_and_latency()`
+   scores against).
+3. Run `python3 embed_corpus.py` to embed both and freeze a held-out query
+   sample, then `python3 run_benchmark.py` to run both the batch and
+   streamed legs and write `results.json`.
+
+`STREAM_BATCH_MIN`/`MAX`, `TOUCH_RATE`, and `CHECKPOINT_EVERY` are plain
+constants near the top of `run_benchmark.py`, edit them to model a
+different write granularity or re-upsert rate than the 1-5 batch size and
+5% touch rate this repo's own run used. `CONTAINER_NAME` and `QDRANT_URL`
+there also assume a local Docker Qdrant; point `QDRANT_URL` at a remote
+instance instead if you don't want the script managing a local container
+(the `restart_qdrant_for_clean_baseline()` calls, used to get isolated
+memory readings between legs, only work against a container it can `docker
+restart` by name).
+
 ## What's not included, and why
 
 - **The LoCoMo dataset itself.** CC BY-NC 4.0, fetched fresh by
