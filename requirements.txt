@@ -1,0 +1,2 @@
+qdrant-client>=1.19
+fastembed>=0.3

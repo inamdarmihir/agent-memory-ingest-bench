@@ -1,0 +1,50 @@
+Real LoCoMo data: 5882 memory records, 300 frozen held-out queries
+  restarting qdrant-ternlight-eval for a clean memory baseline ...
+
+=== batch: agent_memory_batch ===
+  upserted 5882 points in one call, 0.52s
+  settling 30s ...
+  {'recall@1': 0.2433, 'recall@5': 0.48, 'recall@10': 0.5667, 'query_p50_ms': 3.575, 'query_p99_ms': 8.125, 'n_queries': 300}
+  {'points_count': 5882, 'segments_count': 1, 'disk_bytes': 136519258, 'memory_allocated_bytes': 55584872, 'memory_resident_bytes': 185532416}
+  restarting qdrant-ternlight-eval for a clean memory baseline ...
+
+=== streamed: agent_memory_streamed ===
+  checkpoint @ 502/5882 records (0.5s elapsed) ...
+    {'recall@1': 0.0233, 'recall@5': 0.0467, 'recall@10': 0.0533, 'query_p50_ms': 2.951, 'query_p99_ms': 5.467, 'n_queries': 300}
+    {'points_count': 502, 'segments_count': 1, 'disk_bytes': 136348582, 'memory_allocated_bytes': 50469112, 'memory_resident_bytes': 184549376}
+  checkpoint @ 1002/5882 records (2.0s elapsed) ...
+    {'recall@1': 0.0367, 'recall@5': 0.0867, 'recall@10': 0.1133, 'query_p50_ms': 3.017, 'query_p99_ms': 4.953, 'n_queries': 300}
+    {'points_count': 1002, 'segments_count': 1, 'disk_bytes': 136348582, 'memory_allocated_bytes': 50633024, 'memory_resident_bytes': 186580992}
+  checkpoint @ 1500/5882 records (3.5s elapsed) ...
+    {'recall@1': 0.04, 'recall@5': 0.1067, 'recall@10': 0.1267, 'query_p50_ms': 3.153, 'query_p99_ms': 4.79, 'n_queries': 300}
+    {'points_count': 1500, 'segments_count': 1, 'disk_bytes': 136348582, 'memory_allocated_bytes': 50536472, 'memory_resident_bytes': 187498496}
+  checkpoint @ 2004/5882 records (5.1s elapsed) ...
+    {'recall@1': 0.06, 'recall@5': 0.1433, 'recall@10': 0.1767, 'query_p50_ms': 3.049, 'query_p99_ms': 5.006, 'n_queries': 300}
+    {'points_count': 2004, 'segments_count': 1, 'disk_bytes': 136404987, 'memory_allocated_bytes': 51374968, 'memory_resident_bytes': 193069056}
+  checkpoint @ 2500/5882 records (6.5s elapsed) ...
+    {'recall@1': 0.0867, 'recall@5': 0.1967, 'recall@10': 0.2467, 'query_p50_ms': 3.343, 'query_p99_ms': 5.479, 'n_queries': 300}
+    {'points_count': 2500, 'segments_count': 1, 'disk_bytes': 136404987, 'memory_allocated_bytes': 51271600, 'memory_resident_bytes': 194445312}
+  checkpoint @ 3001/5882 records (8.1s elapsed) ...
+    {'recall@1': 0.1133, 'recall@5': 0.2233, 'recall@10': 0.2667, 'query_p50_ms': 3.219, 'query_p99_ms': 4.954, 'n_queries': 300}
+    {'points_count': 3001, 'segments_count': 1, 'disk_bytes': 136404988, 'memory_allocated_bytes': 51240680, 'memory_resident_bytes': 187367424}
+  checkpoint @ 3502/5882 records (9.6s elapsed) ...
+    {'recall@1': 0.1133, 'recall@5': 0.2367, 'recall@10': 0.29, 'query_p50_ms': 3.156, 'query_p99_ms': 5.16, 'n_queries': 300}
+    {'points_count': 3502, 'segments_count': 1, 'disk_bytes': 136450260, 'memory_allocated_bytes': 50881528, 'memory_resident_bytes': 190578688}
+  checkpoint @ 4001/5882 records (11.2s elapsed) ...
+    {'recall@1': 0.1333, 'recall@5': 0.27, 'recall@10': 0.3333, 'query_p50_ms': 3.471, 'query_p99_ms': 5.774, 'n_queries': 300}
+    {'points_count': 4001, 'segments_count': 1, 'disk_bytes': 136450260, 'memory_allocated_bytes': 51270872, 'memory_resident_bytes': 190709760}
+  checkpoint @ 4501/5882 records (12.8s elapsed) ...
+    {'recall@1': 0.17, 'recall@5': 0.33, 'recall@10': 0.4033, 'query_p50_ms': 3.57, 'query_p99_ms': 5.987, 'n_queries': 300}
+    {'points_count': 4501, 'segments_count': 1, 'disk_bytes': 136450260, 'memory_allocated_bytes': 51165640, 'memory_resident_bytes': 190840832}
+  checkpoint @ 5001/5882 records (14.5s elapsed) ...
+    {'recall@1': 0.1967, 'recall@5': 0.38, 'recall@10': 0.45, 'query_p50_ms': 3.565, 'query_p99_ms': 5.523, 'n_queries': 300}
+    {'points_count': 5001, 'segments_count': 1, 'disk_bytes': 136493733, 'memory_allocated_bytes': 51209464, 'memory_resident_bytes': 191627264}
+  checkpoint @ 5501/5882 records (16.1s elapsed) ...
+    {'recall@1': 0.22, 'recall@5': 0.43, 'recall@10': 0.51, 'query_p50_ms': 3.759, 'query_p99_ms': 5.654, 'n_queries': 300}
+    {'points_count': 5501, 'segments_count': 1, 'disk_bytes': 136493733, 'memory_allocated_bytes': 51596848, 'memory_resident_bytes': 192086016}
+  checkpoint @ 5882/5882 records (17.6s elapsed) ...
+    {'recall@1': 0.2433, 'recall@5': 0.48, 'recall@10': 0.5667, 'query_p50_ms': 3.68, 'query_p99_ms': 5.981, 'n_queries': 300}
+    {'points_count': 5882, 'segments_count': 1, 'disk_bytes': 136493733, 'memory_allocated_bytes': 51224616, 'memory_resident_bytes': 192544768}
+  streamed write complete: 5882 records, 18.83s total, 5% touch-update rate, batches of 1-5
+
+Wrote /Users/apple/Downloads/repos-final/qdrant-agent-memory-ingest-bench/results.json
