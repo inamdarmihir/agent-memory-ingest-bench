@@ -2,27 +2,24 @@
 embed_corpus.py
 
 Embeds the real LoCoMo memory records and a frozen, stratified sample of the
-real query set exactly once, with FastEmbed's bge-small-en-v1.5 (the same
-real embedder used as the fp32 baseline in ternlight-techdocs, kept
-consistent so results are comparable across this content program's repos).
-
-Embedding happens once and is cached to embeddings/, so the actual
-batch-vs-streamed write-pattern experiment (run_benchmark.py) measures only
-what the write pattern itself does to a Qdrant collection, not embedding
-cost. This mirrors the real method description: same data, same embedder,
-only the write pattern differs.
+real query set exactly once, with FastEmbed's bge-small-en-v1.5. Embedding
+happens once and is cached to embeddings/, so the actual batch-vs-streamed
+write-pattern experiment (run_benchmark.py) measures only what the write
+pattern itself does to a Qdrant collection, not embedding cost: same data,
+same embedder, only the write pattern differs.
 """
 
+from __future__ import annotations
+
+import argparse
 import json
 import random
 from pathlib import Path
 
 from fastembed import TextEmbedding
 
-DATA_DIR = Path(__file__).parent / "data"
-EMBED_DIR = Path(__file__).parent / "embeddings"
-QUERY_SAMPLE_SIZE = 300
-SEED = 42
+DEFAULT_QUERY_SAMPLE_SIZE = 300
+DEFAULT_SEED = 42
 
 
 def stratified_query_sample(queries: list[dict], n: int, seed: int) -> list[dict]:
@@ -43,27 +40,44 @@ def stratified_query_sample(queries: list[dict], n: int, seed: int) -> list[dict
     return sample[:n]
 
 
-def main() -> None:
-    EMBED_DIR.mkdir(exist_ok=True)
-    records = json.loads((DATA_DIR / "memory_records.json").read_text())
-    queries = json.loads((DATA_DIR / "query_set.json").read_text())
+def build_arg_parser() -> argparse.ArgumentParser:
+    default_dir = Path(__file__).parent
+    parser = argparse.ArgumentParser(description="Embed LoCoMo memory records and a frozen query sample.")
+    parser.add_argument("--data-dir", type=Path, default=default_dir / "data",
+                         help="Directory containing memory_records.json/query_set.json, and where "
+                              "frozen_query_sample.json is written (default: %(default)s)")
+    parser.add_argument("--embed-dir", type=Path, default=default_dir / "embeddings",
+                         help="Directory to write record_vectors.json/query_vectors.json to "
+                              "(default: %(default)s)")
+    parser.add_argument("--query-sample-size", type=int, default=DEFAULT_QUERY_SAMPLE_SIZE,
+                         help="Size of the frozen, stratified held-out query sample (default: %(default)s)")
+    parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
+                         help="Random seed for the stratified query sample (default: %(default)s)")
+    return parser
 
-    frozen_queries = stratified_query_sample(queries, QUERY_SAMPLE_SIZE, SEED)
-    (DATA_DIR / "frozen_query_sample.json").write_text(json.dumps(frozen_queries, indent=2))
+
+def main() -> None:
+    args = build_arg_parser().parse_args()
+    args.embed_dir.mkdir(exist_ok=True, parents=True)
+    records = json.loads((args.data_dir / "memory_records.json").read_text())
+    queries = json.loads((args.data_dir / "query_set.json").read_text())
+
+    frozen_queries = stratified_query_sample(queries, args.query_sample_size, args.seed)
+    (args.data_dir / "frozen_query_sample.json").write_text(json.dumps(frozen_queries, indent=2))
     print(f"Frozen held-out query sample: {len(frozen_queries)} of {len(queries)} real queries "
-          f"(stratified by category, seed={SEED})")
+          f"(stratified by category, seed={args.seed})")
 
     model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
 
     print(f"Embedding {len(records)} real memory records ...")
     record_vecs = [v.tolist() for v in model.embed([r["text"] for r in records])]
-    (EMBED_DIR / "record_vectors.json").write_text(json.dumps(record_vecs))
-    print(f"Wrote {len(record_vecs)} vectors to {EMBED_DIR / 'record_vectors.json'}")
+    (args.embed_dir / "record_vectors.json").write_text(json.dumps(record_vecs))
+    print(f"Wrote {len(record_vecs)} vectors to {args.embed_dir / 'record_vectors.json'}")
 
     print(f"Embedding {len(frozen_queries)} real held-out queries ...")
     query_vecs = [v.tolist() for v in model.embed([q["question"] for q in frozen_queries])]
-    (EMBED_DIR / "query_vectors.json").write_text(json.dumps(query_vecs))
-    print(f"Wrote {len(query_vecs)} vectors to {EMBED_DIR / 'query_vectors.json'}")
+    (args.embed_dir / "query_vectors.json").write_text(json.dumps(query_vecs))
+    print(f"Wrote {len(query_vecs)} vectors to {args.embed_dir / 'query_vectors.json'}")
 
 
 if __name__ == "__main__":

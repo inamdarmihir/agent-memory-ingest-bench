@@ -2,35 +2,30 @@
 fetch_dataset.py
 
 Downloads the real LoCoMo dataset (snap-research/locomo, arXiv:2402.17753),
-CC BY-NC 4.0, non-commercial research use. Not vendored into this repo, same
-reason as ternlight-techdocs doesn't vendor its upstream training code:
-it's a real, independently maintained, separately licensed dataset, better
-fetched fresh than committed as a stale copy.
-
-Flattens LoCoMo's 10 real long-term conversations (5,882 real dialogue turns
-across 19 sessions per conversation on average) into two files:
-
-  memory_records.json  every dialogue turn, in original session/turn order,
-                        the unit an agent-memory system would actually write
-  query_set.json        every real QA pair that carries grounding evidence
-                        (question + the dia_ids of the turns that answer it),
-                        the frozen held-out set recall@k is measured against
-
-Nothing here is synthetic. Both files are a direct reshaping of LoCoMo's own
-real annotations, not generated or paraphrased.
+CC BY-NC 4.0, non-commercial research use, and flattens its 10 real
+long-term conversations (5,882 real dialogue turns across 19 sessions per
+conversation on average) into `memory_records.json` (every dialogue turn,
+in original session/turn order, the unit an agent-memory system would
+actually write) and `query_set.json` (every real QA pair with grounding
+evidence, the frozen held-out set recall@k is measured against). Nothing
+here is synthetic: both files are a direct reshaping of LoCoMo's own real
+annotations. The dataset itself is not vendored into this repo; it's fetched
+fresh under its own license.
 """
 
+from __future__ import annotations
+
+import argparse
 import json
 import urllib.request
 from pathlib import Path
 
 LOCOMO_URL = "https://raw.githubusercontent.com/snap-research/locomo/main/data/locomo10.json"
-OUT_DIR = Path(__file__).parent / "data"
 
 
-def fetch_raw() -> list[dict]:
-    print(f"Downloading real LoCoMo data from {LOCOMO_URL} ...")
-    with urllib.request.urlopen(LOCOMO_URL) as resp:
+def fetch_raw(url: str) -> list[dict]:
+    print(f"Downloading real LoCoMo data from {url} ...")
+    with urllib.request.urlopen(url) as resp:
         raw = json.loads(resp.read())
     print(f"Loaded {len(raw)} real conversations "
           f"(snap-research/locomo, CC BY-NC 4.0, arXiv:2402.17753)")
@@ -85,17 +80,28 @@ def build_query_set(raw: list[dict]) -> list[dict]:
     return queries
 
 
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Fetch and flatten the real LoCoMo dataset.")
+    parser.add_argument("--out-dir", type=Path, default=Path(__file__).parent / "data",
+                         help="Directory to write memory_records.json and query_set.json to "
+                              "(default: %(default)s)")
+    parser.add_argument("--url", default=LOCOMO_URL,
+                         help="URL to fetch the raw LoCoMo JSON from (default: %(default)s)")
+    return parser
+
+
 def main() -> None:
-    OUT_DIR.mkdir(exist_ok=True)
-    raw = fetch_raw()
+    args = build_arg_parser().parse_args()
+    args.out_dir.mkdir(exist_ok=True, parents=True)
+    raw = fetch_raw(args.url)
 
     records = flatten_memory_records(raw)
-    (OUT_DIR / "memory_records.json").write_text(json.dumps(records, indent=2))
-    print(f"Wrote {len(records)} real memory records to {OUT_DIR / 'memory_records.json'}")
+    (args.out_dir / "memory_records.json").write_text(json.dumps(records, indent=2))
+    print(f"Wrote {len(records)} real memory records to {args.out_dir / 'memory_records.json'}")
 
     queries = build_query_set(raw)
-    (OUT_DIR / "query_set.json").write_text(json.dumps(queries, indent=2))
-    print(f"Wrote {len(queries)} real grounded queries to {OUT_DIR / 'query_set.json'}")
+    (args.out_dir / "query_set.json").write_text(json.dumps(queries, indent=2))
+    print(f"Wrote {len(queries)} real grounded queries to {args.out_dir / 'query_set.json'}")
 
 
 if __name__ == "__main__":
