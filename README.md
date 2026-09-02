@@ -9,6 +9,38 @@ Real answer, on this benchmark, at this scale: no. The two collections
 converge to effectively identical recall, latency, disk, and memory. That's
 the actual finding below, not a hedge.
 
+## Quickstart
+
+**(a) Run it yourself, against your own Qdrant container:**
+
+```bash
+docker compose up -d                 # starts Qdrant on localhost:6333
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+python3 fetch_dataset.py             # downloads real LoCoMo data (CC BY-NC 4.0)
+python3 embed_corpus.py              # embeds once, ~20-60 min on CPU depending on hardware
+python3 run_benchmark.py --qdrant-url http://localhost:6333 --container qdrant-agent-memory-bench
+```
+
+`docker-compose.yml`'s service is named `qdrant-agent-memory-bench`, which
+matches `run_benchmark.py --container`'s default, so if you use the compose
+file as-is you can drop both flags above. Run `python3 run_benchmark.py
+--help` for the full list of flags (batch size, touch rate, checkpoint
+interval, data/embedding/output paths, `--wipe-others`, etc.) — none of the
+benchmark's modeling parameters are hidden constants anymore.
+
+**(b) Just want the published numbers, not a re-run?** They're already
+committed: [`results.json`](results.json) (every checkpoint, machine-readable)
+and [`run_benchmark.log`](run_benchmark.log) (the raw run output), summarized
+in [Results](#results) below. Nothing under Quickstart needs to run for you
+to read them.
+
+**(c) Point this at your own data** instead of LoCoMo: write your own
+`memory_records.json` / `query_set.json` (or pass `--data-dir` /
+`--embed-dir` to use different locations) and see
+[Adapting this to your own data](#adapting-this-to-your-own-data).
+
 ## Why this exists
 
 Agent-memory tools (Mem0, Letta, Qdrant's own local-first `engram`) write
@@ -32,13 +64,10 @@ QA pairs with grounding evidence, of which a frozen, category-stratified
 sample of 300 is the held-out query set (seed 42). Not vendored into this
 repo; `fetch_dataset.py` downloads it fresh under its own license.
 
-**Embedder**: FastEmbed `bge-small-en-v1.5`, the same model used as the
-fp32 baseline in this program's other repo,
-[ternlight-techdocs](https://github.com/inamdarmihir/ternlight-techdocs).
-Every record and every query is embedded exactly once (`embed_corpus.py`),
-before either collection is built, so embedding cost is identical and
-excluded from both legs — the only variable that differs is the write
-pattern.
+**Embedder**: FastEmbed `bge-small-en-v1.5`. Every record and every query is
+embedded exactly once (`embed_corpus.py`), before either collection is
+built, so embedding cost is identical and excluded from both legs — the only
+variable that differs is the write pattern.
 
 **Two real Qdrant collections, same data, same vectors, only the write
 pattern differs:**
@@ -154,6 +183,7 @@ difficulty is.
 ## Reproducing this
 
 ```bash
+docker compose up -d          # starts Qdrant on localhost:6333, named qdrant-agent-memory-bench
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
@@ -162,43 +192,58 @@ python3 embed_corpus.py       # embeds once, ~20-60 min on CPU depending on hard
 python3 run_benchmark.py      # runs both legs, writes results.json
 ```
 
-Requires Docker (a local Qdrant container is created/restarted by the
-script) and enough free request-size headroom for a ~48 MB single-call
-upsert — this repo's own run needed
-`QDRANT__SERVICE__MAX_REQUEST_SIZE_MB=128` set on the container; Qdrant's
-default limit (32 MB) is too small for a single-call bulk upsert at this
-record count and rejects it with a plain `400` rather than a silent
-partial write, which is how this was caught during development.
+Requires Docker (the script `docker restart`s and `docker exec`s the
+container between legs to get isolated memory/disk readings, by name via
+`--container`) and enough free request-size headroom for a ~48 MB
+single-call upsert. `docker-compose.yml` at the repo root already sets
+`QDRANT__SERVICE__MAX_REQUEST_SIZE_MB=128`; Qdrant's default limit (32 MB)
+is too small for a single-call bulk upsert at this record count and rejects
+it with a plain `400` rather than a silent partial write, which is how this
+was caught during development.
+
+If you're not using `docker-compose.yml` as-is (different container name,
+remote Qdrant, non-default ports), pass the matching flags — run
+`python3 run_benchmark.py --help` for the full list, including
+`--qdrant-url`, `--container`, `--data-dir`, `--embed-dir`, `--out`,
+`--stream-batch-min`/`--stream-batch-max`, `--touch-rate`,
+`--checkpoint-every`, `--settle-seconds`, and `--wipe-others`.
+
+By default `run_benchmark.py` only ever touches its own two collections
+(`agent_memory_batch`, `agent_memory_streamed`) and leaves everything else
+on the connected Qdrant instance alone, printing a warning if other
+collections exist (since the memory metrics it measures are process-wide,
+not per-collection). Pass `--wipe-others` to delete every other collection
+first — only do this against a Qdrant instance you're sure is safe to wipe;
+it is off by default specifically so pointing `--qdrant-url` at a shared or
+production instance can't silently delete unrelated data.
 
 ## Adapting this to your own data
 
-The whole method is generic once `data/` is in the right shape; nothing
+The whole method is generic once your data is in the right shape; nothing
 in `run_benchmark.py` is LoCoMo-specific past `fetch_dataset.py`. To point
 this at your own records:
 
-1. Write your own `data/memory_records.json`: a list of objects, each with
-   at least `id` (a string, any format, `run_benchmark.py`'s `point_id()`
+1. Write your own `memory_records.json`: a list of objects, each with at
+   least `id` (a string, any format, `run_benchmark.py`'s `point_id()`
    UUID5-hashes it since Qdrant needs int/UUID point IDs) and `text` (the
    string that gets embedded).
-2. Write your own `data/query_set.json`: a list of objects with `question`
-   (the query text), `category` (any label, used only for the stratified
-   sample, a single category is fine) and `evidence_ids` (a list of the
+2. Write your own `query_set.json`: a list of objects with `question` (the
+   query text), `category` (any label, used only for the stratified sample,
+   a single category is fine) and `evidence_ids` (a list of the
    `memory_records.json` `id` values that should count as a correct
    retrieval for that query, the ground truth `measure_recall_and_latency()`
    scores against).
 3. Run `python3 embed_corpus.py` to embed both and freeze a held-out query
    sample, then `python3 run_benchmark.py` to run both the batch and
-   streamed legs and write `results.json`.
+   streamed legs and write your own results file.
 
-`STREAM_BATCH_MIN`/`MAX`, `TOUCH_RATE`, and `CHECKPOINT_EVERY` are plain
-constants near the top of `run_benchmark.py`, edit them to model a
-different write granularity or re-upsert rate than the 1-5 batch size and
-5% touch rate this repo's own run used. `CONTAINER_NAME` and `QDRANT_URL`
-there also assume a local Docker Qdrant; point `QDRANT_URL` at a remote
-instance instead if you don't want the script managing a local container
-(the `restart_qdrant_for_clean_baseline()` calls, used to get isolated
-memory readings between legs, only work against a container it can `docker
-restart` by name).
+By default both scripts look in `./data` and `./embeddings`; pass
+`--data-dir`/`--embed-dir` to either script to use different locations (for
+example, to keep your own dataset entirely separate from LoCoMo's). Write
+granularity and re-upsert rate are also flags rather than constants:
+`--stream-batch-min`/`--stream-batch-max` (default 1-5) and `--touch-rate`
+(default 5%) on `run_benchmark.py`, in place of this repo's own LoCoMo run's
+values.
 
 ## What's not included, and why
 
