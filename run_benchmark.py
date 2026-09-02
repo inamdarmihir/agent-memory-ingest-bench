@@ -59,6 +59,19 @@ def ensure_collection(client: QdrantClient, name: str) -> None:
     )
 
 
+def percentile(values: list[float], p: float) -> float:
+    """Nearest-rank percentile of a sorted-in-place-safe copy of `values`.
+    `p` is in [0, 100]. Matches the indexing this repo's committed
+    results.json was already computed with for p50/p99 (n // 2 and
+    int(n * 0.99) on a 0-indexed sorted list), just named and bounds-checked
+    instead of inlined twice."""
+    if not values:
+        raise ValueError("percentile() requires at least one value")
+    ordered = sorted(values)
+    idx = min(int(len(ordered) * (p / 100)), len(ordered) - 1)
+    return ordered[idx]
+
+
 def measure_recall_and_latency(client: QdrantClient, collection: str,
                                 frozen_queries: list[dict], query_vecs: list[list[float]],
                                 ks: tuple[int, ...] = (1, 5, 10)) -> dict[str, Any]:
@@ -74,9 +87,8 @@ def measure_recall_and_latency(client: QdrantClient, collection: str,
             if evidence_point_ids & top_k_ids:
                 hits[k] += 1
     n = len(frozen_queries)
-    latencies.sort()
-    p50 = latencies[len(latencies) // 2]
-    p99 = latencies[int(len(latencies) * 0.99)]
+    p50 = percentile(latencies, 50)
+    p99 = percentile(latencies, 99)
     return {
         **{f"recall@{k}": round(hits[k] / n, 4) for k in ks},
         "query_p50_ms": round(p50, 3),
@@ -205,7 +217,7 @@ def run_streamed_leg(client: QdrantClient, records: list[dict], record_vecs: lis
     ensure_collection(client, name)
 
     rng = random.Random(SEED)
-    written_ids: list[int] = []  # indices into records already upserted, for touch-update sampling
+    written_indices: list[int] = []  # indices into `records` already upserted, for touch-update sampling
     checkpoints = []
     i = 0
     t_start = time.perf_counter()
@@ -217,8 +229,8 @@ def run_streamed_leg(client: QdrantClient, records: list[dict], record_vecs: lis
         # Real re-upsert of an already-written record's real payload/vector,
         # unchanged, at touch_rate probability, simulating an agent
         # re-confirming a memory it already wrote (not fabricated content).
-        if written_ids and rng.random() < touch_rate:
-            touch_idx = rng.choice(written_ids)
+        if written_indices and rng.random() < touch_rate:
+            touch_idx = rng.choice(written_indices)
             client.upsert(
                 collection_name=name,
                 points=models.Batch(
@@ -237,17 +249,17 @@ def run_streamed_leg(client: QdrantClient, records: list[dict], record_vecs: lis
                 payloads=[{"dia_id": records[j]["id"], "conversation_id": records[j]["conversation_id"]} for j in batch_idx],
             ),
         )
-        written_ids.extend(batch_idx)
+        written_indices.extend(batch_idx)
         i += batch_size
 
-        crossed_checkpoint = (len(written_ids) // checkpoint_every) > (len(checkpoints))
+        crossed_checkpoint = (len(written_indices) // checkpoint_every) > (len(checkpoints))
         if crossed_checkpoint or i >= len(records):
             elapsed = time.perf_counter() - t_start
-            print(f"  checkpoint @ {len(written_ids)}/{len(records)} records ({elapsed:.1f}s elapsed) ...")
+            print(f"  checkpoint @ {len(written_indices)}/{len(records)} records ({elapsed:.1f}s elapsed) ...")
             metrics = measure_recall_and_latency(client, name, frozen_queries, query_vecs)
             footprint = measure_footprint(client, name, container, qdrant_url)
             checkpoints.append({
-                "records_written": len(written_ids),
+                "records_written": len(written_indices),
                 "elapsed_seconds": round(elapsed, 2),
                 **metrics,
                 **footprint,
