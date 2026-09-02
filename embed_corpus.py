@@ -20,6 +20,7 @@ from fastembed import TextEmbedding
 
 DEFAULT_QUERY_SAMPLE_SIZE = 300
 DEFAULT_SEED = 42
+DEFAULT_MODEL = "BAAI/bge-small-en-v1.5"
 
 
 def stratified_query_sample(queries: list[dict], n: int, seed: int) -> list[dict]:
@@ -53,6 +54,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
                          help="Size of the frozen, stratified held-out query sample (default: %(default)s)")
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED,
                          help="Random seed for the stratified query sample (default: %(default)s)")
+    parser.add_argument("--model", default=DEFAULT_MODEL,
+                         help="FastEmbed model name to embed records and queries with "
+                              "(default: %(default)s). Changing this from the published run's "
+                              "model makes vectors incomparable with the committed results.json.")
     return parser
 
 
@@ -67,7 +72,7 @@ def main() -> None:
     print(f"Frozen held-out query sample: {len(frozen_queries)} of {len(queries)} real queries "
           f"(stratified by category, seed={args.seed})")
 
-    model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    model = TextEmbedding(model_name=args.model)
 
     print(f"Embedding {len(records)} real memory records ...")
     record_vecs = [v.tolist() for v in model.embed([r["text"] for r in records])]
