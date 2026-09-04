@@ -87,6 +87,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
                               "(default: %(default)s)")
     parser.add_argument("--url", default=LOCOMO_URL,
                          help="URL to fetch the raw LoCoMo JSON from (default: %(default)s)")
+    parser.add_argument("--max-conversations", type=int, default=None,
+                         help="Only keep the first N of LoCoMo's 10 real conversations (default: all). "
+                              "Still real LoCoMo data, just fewer of it — use this to build a small, "
+                              "fast slice for a smoke test instead of the full 5,882-record corpus "
+                              "(see 'Smoke test' in README.md).")
     return parser
 
 
@@ -94,6 +99,9 @@ def main() -> None:
     args = build_arg_parser().parse_args()
     args.out_dir.mkdir(exist_ok=True, parents=True)
     raw = fetch_raw(args.url)
+    if args.max_conversations is not None:
+        raw = raw[: args.max_conversations]
+        print(f"--max-conversations set: keeping the first {len(raw)} of the fetched conversations")
 
     records = flatten_memory_records(raw)
     (args.out_dir / "memory_records.json").write_text(json.dumps(records, indent=2))

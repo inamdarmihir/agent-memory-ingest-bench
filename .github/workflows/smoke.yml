@@ -1,0 +1,29 @@
+name: smoke test
+
+# Validates the pipeline (fetch -> embed -> run_benchmark) end-to-end against
+# a real, small slice of LoCoMo and a real Qdrant container, in a couple of
+# minutes. This is NOT a re-run of the published benchmark (that's a
+# 20-60 minute embed step over 5,882 records) and it never touches
+# data/, embeddings/, or the committed results.json. See smoke_test.sh.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run smoke test
+        run: ./smoke_test.sh

@@ -1,6 +1,9 @@
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    # Pinned so `docker compose up` reproduces the same server version the
+    # published results.json was measured against (qdrant-client>=1.19 in
+    # requirements.txt). Bump deliberately, not via `:latest` drift.
+    image: qdrant/qdrant:v1.19.0
     container_name: qdrant-agent-memory-bench
     ports:
       - "6333:6333"
