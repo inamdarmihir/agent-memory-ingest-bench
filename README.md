@@ -1,44 +1,96 @@
 # agent-memory-ingest-bench
 
-Does writing a Qdrant collection the way an AI agent's memory system actually
-writes it — continuous small batches, interleaved reads, occasional
-re-writes of things already stored — cost anything, compared to loading the
-same data the way a normal RAG corpus gets loaded (one bulk upsert)?
+Measures whether writing a Qdrant collection the way an AI agent's memory
+system actually writes it — continuous small batches, interleaved reads,
+occasional re-writes of things already stored — costs anything in recall,
+query latency, or disk/memory footprint, compared to loading the same data
+the way a normal RAG corpus gets loaded (one bulk upsert). Real LoCoMo
+dialogue data, a real Qdrant container, two collections built from identical
+vectors where only the write pattern differs. Companion to AI Hive's "What
+agent memory actually does to a vector index."
 
 Real answer, on this benchmark, at this scale: no. The two collections
 converge to effectively identical recall, latency, disk, and memory. That's
 the actual finding below, not a hedge.
 
+## Results at a glance
+
+| | Batch (final) | Streamed (final, 5,882/5,882) |
+|---|---:|---:|
+| recall@1 | 0.2433 | 0.2433 |
+| recall@5 | 0.4800 | 0.4800 |
+| recall@10 | 0.5667 | 0.5667 |
+| query p50 | 3.575 ms | 3.680 ms |
+| query p99 | 8.125 ms | 5.981 ms |
+| disk | 136,519,258 B | 136,493,733 B |
+| write time | 0.52s (one call) | 18.83s (1,700+ calls) |
+
+Full table, the streamed leg's checkpoint-by-checkpoint trajectory, and how
+to plot it: [RESULTS.md](RESULTS.md). Machine-readable, every checkpoint:
+[`results.json`](results.json). Raw run output: [`run_benchmark.log`](run_benchmark.log).
+
 ## Quickstart
 
-**(a) Run it yourself, against your own Qdrant container:**
+**Three ways to use this repo, depending on how much time you have:**
+
+| Path | Time | What you get |
+|---|---|---|
+| [(a) Inspect published results](#a-inspect-the-published-results-0-setup) | 0 min | Read the numbers above, no setup |
+| [(b) Smoke test](#b-smoke-test-1-2-min) | 1-2 min | Confirm the pipeline runs end-to-end, on your machine |
+| [(c) Full reproduction](#c-full-reproduction-25-65-min) | 25-65 min | Regenerate the real 5,882-record benchmark yourself |
+
+The full run's slow step is embedding, not Qdrant: **`embed_corpus.py` takes
+~20-60 minutes on CPU** to embed 5,882 records + 300 queries with FastEmbed,
+depending on your hardware. Everything else (fetch, benchmark) is seconds to
+low minutes. If you just want to know the pipeline works, use (b) instead.
+
+### (a) Inspect the published results (0 setup)
+
+Nothing needs to run. The numbers are already committed:
+[`results.json`](results.json) (every checkpoint, machine-readable) and
+[`run_benchmark.log`](run_benchmark.log) (the raw run output), summarized in
+[Results at a glance](#results-at-a-glance) above and in full in
+[RESULTS.md](RESULTS.md).
+
+### (b) Smoke test (1-2 min)
+
+Validates the real pipeline — fetch, embed, both benchmark legs, against a
+real (throwaway) Qdrant container — on a small real slice of LoCoMo (1
+conversation, ~400-600 records) instead of the full corpus. Doesn't touch
+`data/`, `embeddings/`, or the committed `results.json`.
+
+```bash
+pip install -r requirements.txt
+./smoke_test.sh
+```
+
+Requires Docker. Runs in a throwaway container
+(`qdrant-agent-memory-bench-smoke` by default) on port 6344, and cleans up
+after itself. This is also what runs in CI on every push
+(`.github/workflows/smoke.yml`).
+
+### (c) Full reproduction (25-65 min)
 
 ```bash
 docker compose up -d                 # starts Qdrant on localhost:6333
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-python3 fetch_dataset.py             # downloads real LoCoMo data (CC BY-NC 4.0)
+python3 fetch_dataset.py             # downloads real LoCoMo data (CC BY-NC 4.0), seconds
 python3 embed_corpus.py              # embeds once, ~20-60 min on CPU depending on hardware
-python3 run_benchmark.py --qdrant-url http://localhost:6333 --container qdrant-agent-memory-bench
+python3 run_benchmark.py             # runs both legs, writes results.json, ~1-2 min
 ```
 
 `docker-compose.yml`'s service is named `qdrant-agent-memory-bench`, which
 matches `run_benchmark.py --container`'s default, so if you use the compose
-file as-is you can drop both flags above. Run `python3 run_benchmark.py
---help` for the full list of flags (batch size, touch rate, checkpoint
-interval, data/embedding/output paths, `--wipe-others`, etc.) — none of the
-benchmark's modeling parameters are hidden constants anymore.
+file as-is you can drop that flag. Run `python3 run_benchmark.py --help` for
+the full list of flags (batch size, touch rate, checkpoint interval,
+data/embedding/output paths, `--wipe-others`, etc.) — none of the
+benchmark's modeling parameters are hidden constants. See
+[Reproducing this](#reproducing-this) below for the full detail (request
+size limits, container-name requirements, what `--wipe-others` does).
 
-**(b) Just want the published numbers, not a re-run?** They're already
-committed: [`results.json`](results.json) (every checkpoint, machine-readable)
-and [`run_benchmark.log`](run_benchmark.log) (the raw run output), summarized
-in [Results](#results) below. Nothing under Quickstart needs to run for you
-to read them.
-
-**(c) Point this at your own data** instead of LoCoMo: write your own
-`memory_records.json` / `query_set.json` (or pass `--data-dir` /
-`--embed-dir` to use different locations) and see
+**Want to point this at your own data instead of LoCoMo?** See
 [Adapting this to your own data](#adapting-this-to-your-own-data).
 
 ## Why this exists
@@ -84,54 +136,6 @@ Both legs use `default_segment_number=1` (deliberately, see Limitations)
 and run against a container restarted between legs so process-wide memory
 readings aren't contaminated by whichever collection ran first.
 
-## Results
-
-| | Batch (final) | Streamed (final, 5,882/5,882) |
-|---|---:|---:|
-| recall@1 | 0.2433 | 0.2433 |
-| recall@5 | 0.4800 | 0.4800 |
-| recall@10 | 0.5667 | 0.5667 |
-| query p50 | 3.575 ms | 3.680 ms |
-| query p99 | 8.125 ms | 5.981 ms |
-| segments | 1 | 1 |
-| disk | 136,519,258 B | 136,493,733 B |
-| memory allocated | 55,584,872 B | 51,224,616 B |
-| memory resident | 185,532,416 B | 192,544,768 B |
-| write time | 0.52s (one call) | 18.83s (1,700+ calls) |
-
-Recall and disk are effectively identical (the ~25 KB disk difference and
-the memory deltas are within normal run-to-run noise, not a pattern).
-Streamed p99 is actually lower here, which is noise at this query count,
-not a real streamed-is-faster effect. Full machine-readable results,
-including every checkpoint: [`results.json`](results.json). Raw run log:
-[`run_benchmark.log`](run_benchmark.log).
-
-### The streamed leg's checkpoint trajectory
-
-| Records written | recall@1 | recall@5 | recall@10 | query p50 |
-|---:|---:|---:|---:|---:|
-| 502 | 0.0233 | 0.0467 | 0.0533 | 2.951 ms |
-| 1,002 | 0.0367 | 0.0867 | 0.1133 | 3.017 ms |
-| 1,500 | 0.0400 | 0.1067 | 0.1267 | 3.153 ms |
-| 2,004 | 0.0600 | 0.1433 | 0.1767 | 3.049 ms |
-| 2,500 | 0.0867 | 0.1967 | 0.2467 | 3.343 ms |
-| 3,001 | 0.1133 | 0.2233 | 0.2667 | 3.219 ms |
-| 3,502 | 0.1133 | 0.2367 | 0.2900 | 3.156 ms |
-| 4,001 | 0.1333 | 0.2700 | 0.3333 | 3.471 ms |
-| 4,501 | 0.1700 | 0.3300 | 0.4033 | 3.570 ms |
-| 5,001 | 0.1967 | 0.3800 | 0.4500 | 3.565 ms |
-| 5,501 | 0.2200 | 0.4300 | 0.5100 | 3.759 ms |
-| 5,882 | 0.2433 | 0.4800 | 0.5667 | 3.680 ms |
-
-Recall climbs steadily as more records get written. This is not
-degradation, it's the correct behavior: a query's grounding evidence
-literally doesn't exist in the collection yet at an early checkpoint, so it
-can't be retrieved. Query latency stays flat (3.0-3.8 ms p50) across the
-entire write process, from 502 points to 5,882. That flat line, not the
-recall climb, is the real signal: nothing about writing in small batches,
-interleaved with reads and re-upserts, degraded query latency as the
-collection grew.
-
 ## What this actually shows
 
 **No measurable cost to agent-style write patterns, at this scale.**
@@ -144,15 +148,13 @@ hypothesis going in (that streamed writes would measurably degrade recall
 or latency past some point) did not hold at 5,882 records.
 
 **Absolute recall is genuinely low (0.24-0.57), and that's a property of
-the task, not the write pattern.** Unlike this program's other repo, which
-retrieves against a 500-candidate closed set, this is retrieval against
-5,882 real conversation turns pulled from ten different, topically
-unrelated dialogues, where a question's real phrasing and its grounding
-utterance's real phrasing can diverge a lot (LoCoMo's temporal and
-multi-hop question categories are deliberately hard this way). Both
-collections see the same low numbers, which is the actual point: the write
-pattern isn't what's limiting recall here, embedding-level retrieval
-difficulty is.
+the task, not the write pattern.** This is retrieval against 5,882 real
+conversation turns pulled from ten different, topically unrelated
+dialogues, where a question's real phrasing and its grounding utterance's
+real phrasing can diverge a lot (LoCoMo's temporal and multi-hop question
+categories are deliberately hard this way). Both collections see the same
+low numbers, which is the actual point: the write pattern isn't what's
+limiting recall here, embedding-level retrieval difficulty is.
 
 ## Limitations
 
@@ -162,8 +164,7 @@ difficulty is.
   segments would actually accumulate.
 - **`default_segment_number=1` was forced on both collections**,
   deliberately, to isolate the write-pattern variable from a
-  segment-count variable (the same choice `payload-audit` made for
-  the same reason). This means the specific question "does streaming
+  segment-count variable. This means the specific question "does streaming
   create segment fragmentation under Qdrant's default multi-segment
   optimizer" is untested here; this repo tests recall/latency/footprint
   parity under controlled segment count, not fragmentation itself.
@@ -196,9 +197,11 @@ Requires Docker (the script `docker restart`s and `docker exec`s the
 container between legs to get isolated memory/disk readings, by name via
 `--container`) and enough free request-size headroom for a ~48 MB
 single-call upsert. `docker-compose.yml` at the repo root already sets
-`QDRANT__SERVICE__MAX_REQUEST_SIZE_MB=128`; Qdrant's default limit (32 MB)
-is too small for a single-call bulk upsert at this record count and rejects
-it with a plain `400` rather than a silent partial write, which is how this
+`QDRANT__SERVICE__MAX_REQUEST_SIZE_MB=128` and pins the image to
+`qdrant/qdrant:v1.19.0` (matching the `qdrant-client>=1.19` pin in
+`requirements.txt`); Qdrant's default request-size limit (32 MB) is too
+small for a single-call bulk upsert at this record count and rejects it
+with a plain `400` rather than a silent partial write, which is how this
 was caught during development.
 
 If you're not using `docker-compose.yml` as-is (different container name,
@@ -207,6 +210,9 @@ remote Qdrant, non-default ports), pass the matching flags — run
 `--qdrant-url`, `--container`, `--data-dir`, `--embed-dir`, `--out`,
 `--stream-batch-min`/`--stream-batch-max`, `--touch-rate`,
 `--checkpoint-every`, `--settle-seconds`, and `--wipe-others`.
+`fetch_dataset.py --help` and `embed_corpus.py --help` list the fetch/embed
+side's own flags (`--out-dir`, `--url`, `--max-conversations`;
+`--data-dir`, `--embed-dir`, `--query-sample-size`, `--seed`, `--model`).
 
 By default `run_benchmark.py` only ever touches its own two collections
 (`agent_memory_batch`, `agent_memory_streamed`) and leaves everything else
@@ -216,6 +222,31 @@ not per-collection). Pass `--wipe-others` to delete every other collection
 first — only do this against a Qdrant instance you're sure is safe to wipe;
 it is off by default specifically so pointing `--qdrant-url` at a shared or
 production instance can't silently delete unrelated data.
+
+## Smoke test
+
+`smoke_test.sh` runs the same three scripts (`fetch_dataset.py`,
+`embed_corpus.py`, `run_benchmark.py`) against a small, real slice of
+LoCoMo — one conversation instead of ten, ~400-600 records instead of
+5,882, a 20-query sample instead of 300 — against a disposable Qdrant
+container it starts and tears down itself. It finishes in one to two
+minutes and never touches `data/`, `embeddings/`, or the committed
+`results.json`; everything runs against its own temp directory and its own
+container (`qdrant-agent-memory-bench-smoke` on port 6344 by default,
+override with `SMOKE_PORT` or by passing a container name as `$1`).
+
+```bash
+pip install -r requirements.txt
+./smoke_test.sh
+```
+
+This is the fast way to confirm the pipeline itself (fetch → embed → both
+benchmark legs → checkpoints → recall/latency/footprint measurement) works
+on your machine — a clone health check, not a re-run of the published
+benchmark. It's also what `.github/workflows/smoke.yml` runs in CI on every
+push and pull request; the underlying flag it relies on is
+`fetch_dataset.py --max-conversations N`, which keeps the pipeline entirely
+real (real download, real embedder, real Qdrant) while keeping it small.
 
 ## Adapting this to your own data
 
@@ -251,6 +282,9 @@ values.
   `fetch_dataset.py`, not redistributed here.
 - **The FastEmbed vectors (`embeddings/`).** Regenerable in one command;
   keeping them out of git keeps the repo small.
+- **Plotting code.** [RESULTS.md](RESULTS.md) has a short snippet to plot
+  the checkpoint trajectory straight out of `results.json` if you want a
+  chart; it's not required to read or reproduce the numbers.
 
 ## Citation
 
